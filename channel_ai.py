@@ -10,6 +10,7 @@ License: MIT
 
 import asyncio
 import hashlib
+import html
 import json
 import os
 import re
@@ -312,13 +313,14 @@ async def process_post(session, post, prompt_config):
 
     # Without a working provider, keep the workflow usable and free: do not claim
     # fact-checking or invent details; publish a clearly attributed edited summary.
-    factcheck = await ai_call(
-        session, "perplexity-fast",
-        "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
-        f"Verify:\n{source_text[:400]}", 500,
-    )
-
+    factcheck = None
     rewritten = None
+    if POLLINATIONS_KEY:
+        factcheck = await ai_call(
+            session, "perplexity-fast",
+            "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
+            f"Verify:\n{source_text[:400]}", 500,
+        )
     if POLLINATIONS_KEY:
         rewritten = await ai_call(
             session, TEXT_MODEL, prompt_config.get("system_prompt", "Rewrite this news clearly in Russian."),
