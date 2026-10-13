@@ -180,15 +180,18 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     import channel_ai as _channel_ai
 
     # Refresh provider credentials and destination at the start of every run.
-    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip() or POLLINATIONS_KEY
-    destination = os.getenv("CHANNEL_ID", "").strip() or CHANNEL_ID
-    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or BOT_TOKEN
-    # The publishing helper reads these module-level settings.
+    # Environment values are authoritative at runtime. Do not fall back to stale
+    # module constants: the dashboard may have cleared or replaced a value after import.
+    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip()
+    destination = os.getenv("CHANNEL_ID", "").strip()
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
     BOT_TOKEN = bot_token
     CHANNEL_ID = destination
+    _channel_ai.POLLINATIONS_KEY = api_key
     if api_key:
-        _channel_ai.POLLINATIONS_KEY = api_key
         _channel_ai.HEADERS["Authorization"] = f"Bearer {api_key}"
+    else:
+        _channel_ai.HEADERS.pop("Authorization", None)
 
     # AI is optional: channel_ai.process_post has a deterministic no-cost fallback.
     if not api_key:
