@@ -67,16 +67,11 @@ async def scan_public_sources(session, channels, hours=SCAN_HOURS):
                     print(f"  Source @{username}: public preview unavailable (HTTP {resp.status})")
                     continue
                 page = await resp.text()
-            # Each public Telegram post is wrapped in a widget_message_wrap.
-            blocks = re.findall(
-                r'<div class="tgme_widget_message_wrap[^"]*"[^>]*>.*?</div>\s*</div>\s*</div>',
-                page, flags=re.S
-            )
-            # Telegram markup can change; use the outer widget marker as a fallback.
-            if not blocks:
-                starts = [m.start() for m in re.finditer(r'<div class="tgme_widget_message_wrap', page)]
-                blocks = [page[a:(starts[i + 1] if i + 1 < len(starts) else len(page))]
-                          for i, a in enumerate(starts)]
+            # Split at each outer message wrapper instead of matching nested
+            # HTML divs with a regex, which can swallow or truncate posts.
+            starts = [m.start() for m in re.finditer(r'<div class="tgme_widget_message_wrap', page)]
+            blocks = [page[a:(starts[i + 1] if i + 1 < len(starts) else len(page))]
+                      for i, a in enumerate(starts)]
             for block in blocks[-SCAN_LIMIT:]:
                 post_match = re.search(r'data-post="([^"]+)"', block)
                 text_match = re.search(
