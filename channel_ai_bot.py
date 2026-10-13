@@ -128,8 +128,8 @@ async def publish_post_bot(session, destination, result):
         text = text[:3990].rsplit(" ", 1)[0] + "…"
     # Telegram HTML parsing can fail on model-generated malformed markup.
     # Retry as plain text rather than silently losing a generated post.
-    plain_text = re.sub(r"<br\\s*/?>", "\\n", text, flags=re.I)
-    plain_text = re.sub(r"</(p|div|li|h[1-6])\\s*>", "\\n", plain_text, flags=re.I)
+    plain_text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    plain_text = re.sub(r"</(p|div|li|h[1-6])\s*>", "\n", plain_text, flags=re.I)
     plain_text = html.unescape(re.sub(r"<[^>]+>", "", plain_text))
     image_path = None
     try:
