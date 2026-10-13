@@ -101,12 +101,23 @@ def block_cross_site_writes():
     # ambient credentials, so they pass through untouched.
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
-    fetch_site = request.headers.get("Sec-Fetch-Site", "")
-    if fetch_site and fetch_site not in ("same-origin", "none"):
-        return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    # Render and other reverse proxies may expose the public host through
+    # X-Forwarded-Host while Flask's request.host reflects an internal host.
+    # Compare Origin against the externally visible host first, falling back
+    # to request.host for local deployments.
     origin = request.headers.get("Origin", "")
-    if origin and urlsplit(origin).netloc != request.host:
-        return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    forwarded_host = request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()
+    expected_host = forwarded_host or request.host
+    if origin:
+        origin_host = urlsplit(origin).netloc
+        if origin_host and origin_host.lower() != expected_host.lower():
+            return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    else:
+        # Requests without an Origin header are accepted only when Fetch Metadata
+        # does not explicitly identify them as cross-site.
+        fetch_site = request.headers.get("Sec-Fetch-Site", "")
+        if fetch_site and fetch_site not in ("same-origin", "none"):
+            return jsonify({"error": "Cross-site requests are not allowed"}), 403
 
 
 @app.after_request
