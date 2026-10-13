@@ -19,6 +19,25 @@ from channel_ai import (
     load_hashes, save_hashes, generate_image,
 )
 
+def _configured_sources():
+    """Prefer active sources added in the dashboard database; use defaults otherwise."""
+    try:
+        from web.db import get_sources
+        rows = get_sources() or []
+        names = []
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("is_active", 1):
+                continue
+            name = row.get("username")
+            if name:
+                names.append(str(name).strip().lstrip("@"))
+        if names:
+            return list(dict.fromkeys(names))
+    except Exception as exc:
+        print(f"  Could not load dashboard sources; using DEFAULT_SOURCES: {exc}")
+    return [str(s).strip().lstrip("@") for s in DEFAULT_SOURCES if str(s).strip()]
+
+
 BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
 CHANNEL_ID = os.getenv("CHANNEL_ID", "").strip()
 TEXT_MODEL = os.getenv("TEXT_MODEL", "claude")
@@ -97,7 +116,7 @@ async def _bot_api(session, method, *, data=None):
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is missing in Render Environment")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
-    async with session.post(url, data=data, **(form or {}),
+    async with session.post(url, data=data,
                             timeout=aiohttp.ClientTimeout(total=60)) as resp:
         result = await resp.json(content_type=None)
         if resp.status != 200 or not result.get("ok"):
