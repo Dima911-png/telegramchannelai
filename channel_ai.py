@@ -50,7 +50,7 @@ DEFAULT_SOURCES = (
 # Per-channel configs: each key maps to a target channel with its own personality.
 # Override via CHANNEL_CONFIGS env var (JSON) or fall back to CHANNEL_ID env var.
 _DEFAULT_PROMPT = {
-    "channel_id": int(os.getenv("CHANNEL_ID", "0")),
+    "channel_id": int(os.getenv("CHANNEL_ID", "0")) if os.getenv("CHANNEL_ID", "").lstrip("-").isdigit() else 0,
     "system_prompt": "You are a news channel editor. Rewrite the news in an engaging style.\n"
                      "Format: HTML for Telegram. Include fact-check section. 200-300 words.",
     "language": "en",
