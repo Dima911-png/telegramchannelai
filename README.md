@@ -96,6 +96,16 @@ PIPELINE_INTERVAL=3600
 PIPELINE_MODE=semi-auto
 ```
 
+## Free Bot API mode and deployment notes
+
+The web dashboard uses `channel_ai_bot.py`: it reads public Telegram source previews and publishes through a Telegram bot. Add the bot as an administrator of the destination channel with permission to post messages, then set `TELEGRAM_BOT_TOKEN` and `CHANNEL_ID` in Settings or the hosting provider's environment settings. The built-in source list can be overridden with `DEFAULT_SOURCES`.
+
+When `POLLINATIONS_API_KEY` is blank or the provider fails, the dashboard pipeline can publish a basic attributed text post without AI rewriting or a generated image. This fallback does not perform fact-checking; review sensitive or breaking news before enabling automatic publication.
+
+For Render, configure secrets and persistent settings as Environment Variables in the Render dashboard. A local `.env` file may be lost when an ephemeral instance restarts or redeploys. Render Free instances can sleep when idle, so scheduled runs are not guaranteed to execute continuously. The `/health` endpoint checks whether the web process responds; it does not confirm that Telegram credentials are valid or that a post can be published.
+
+The automated CI workflow runs lint, import checks, and tests on Python 3.11 and 3.12. A successful CI run does not replace an end-to-end test using your own Telegram bot and destination channel.
+
 ## Requirements
 
 - Python 3.10+
