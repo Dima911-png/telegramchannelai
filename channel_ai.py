@@ -299,86 +299,57 @@ def is_duplicate(text: str):
 # ═══════════════════════════════════════════
 
 async def process_post(session, post, prompt_config):
-    """Full pipeline for a single post: factcheck → rewrite → humanize → image."""
+    """Create a Telegram post. Use AI when configured; fall back to free deterministic editing."""
+    source_text = (post.get("text") or "").strip()
+    if not source_text:
+        return None
 
-    # 1. Fact-check via Perplexity
-    factcheck = await ai_call(
-        session, "perplexity-fast",
-        "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
-        f"Verify:\n{post['text'][:400]}",
-        500,
-    )
-
-    # 2. Build source link
     source_link = post.get("source", "")
     msg_link = ""
     if post.get("msg_id") and post.get("source_username"):
         msg_link = f"https://t.me/{post['source_username']}/{post['msg_id']}"
         source_link = f"{post['source']} | {msg_link}"
 
-    # 3. Rewrite in channel style
-    rewritten = await ai_call(
-        session, TEXT_MODEL,
-        prompt_config["system_prompt"],
-        f"Rewrite:\n{post['text']}\n\nSource: {source_link}\n\nFact-check:\n{factcheck or 'none'}",
-        1500,
+    # Without a working provider, keep the workflow usable and free: do not claim
+    # fact-checking or invent details; publish a clearly attributed edited summary.
+    factcheck = await ai_call(
+        session, "perplexity-fast",
+        "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
+        f"Verify:\n{source_text[:400]}", 500,
     )
+
+    rewritten = None
+    if POLLINATIONS_KEY:
+        rewritten = await ai_call(
+            session, TEXT_MODEL, prompt_config.get("system_prompt", "Rewrite this news clearly in Russian."),
+            f"Rewrite:\n{source_text}\n\nSource: {source_link}\n\nFact-check:\n{factcheck or 'none'}",
+            1500,
+        )
+
+    if rewritten and rewritten.strip().upper().startswith("SKIP"):
+        return None
+
     if not rewritten:
-        return None
+        # No external AI key or provider is unavailable: safe, no-cost fallback.
+        clean = re.sub(r"\\s+", " ", source_text).strip()
+        rewritten = f"<b>📰 Коротко о главном</b>\n\n{clean[:3000]}"
+        if source_link:
+            rewritten += f"\n\n🔗 Источник: {html.escape(source_link)}"
+        if msg_link and msg_link not in rewritten:
+            rewritten += f"\n📢 {html.escape(msg_link)}"
+        return {"text": rewritten, "image_prompt": "", "poll_data": "", "source": post.get("source", "")}
 
-    # Check exclusions
-    if rewritten.strip().upper().startswith("SKIP"):
-        print(f"  Skipped (exclusion): {post['text'][:50]}...")
-        return None
-
-    # 4. Humanize — make it sound natural
-    humanized = await ai_call(
-        session, "openai",
-        "Humanize this text. Keep HTML formatting. Replace formal language with conversational. "
-        "Vary sentence length. Remove excess emoji (max 2). Don't add new facts. Output ONLY the text.",
-        rewritten,
-        1500,
-    )
-    # only swap in the humanized version if it looks like a full post — a short reply
-    # here usually means a refusal or a truncated blurb, so keep the original rewrite
-    if humanized and len(humanized) > 100:
-        rewritten = humanized
-
-    # 5. Extract URLs from factcheck
     if factcheck:
-        urls = re.findall(r"https?://[^\s\)\"<>]+", factcheck)
-        # Keep only links that point at an actual article, not a bare homepage.
-        # "https://site.com" splits into 3 parts; anything with a path has 4+.
+        urls = re.findall(r"https?://[^\\s\\)\\\"<>]+", factcheck)
         real_urls = [u for u in urls if len(u.split("/")) > 3]
         if real_urls and not any(u in rewritten for u in real_urls[:2]):
             rewritten += "\n\n" + "\n".join(f"🔗 {u}" for u in real_urls[:3])
-
     if msg_link and msg_link not in rewritten:
         rewritten += f"\n📢 {msg_link}"
 
-    # 6. Generate image prompt
-    img_prompt = await ai_call(
-        session, "claude-fast",
-        "Generate Flux AI image prompt. English, max 50 words. Cinematic, 4k. NO text. Output ONLY prompt.",
-        rewritten[:300],
-        80,
-    )
-
-    # 7. Generate poll question
-    poll_data = await ai_call(
-        session, "claude-fast",
-        'Create a Telegram poll. JSON only, no markdown:\n'
-        '{"question":"short question about the news","answers":["option 1","option 2","option 3"]}',
-        rewritten[:300],
-        200,
-    )
-
-    return {
-        "text": rewritten,
-        "image_prompt": img_prompt,
-        "poll_data": poll_data,
-        "source": post.get("source", ""),
-    }
+    img_prompt = ""
+    poll_data = ""
+    return {"text": rewritten, "image_prompt": img_prompt, "poll_data": poll_data, "source": post.get("source", "")}
 
 
 # ═══════════════════════════════════════════
