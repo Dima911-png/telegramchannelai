@@ -157,6 +157,51 @@ init_db()
 logger.info("App started, db initialized")
 
 
+# --- lightweight in-process scheduler ---
+# Render free services can sleep while idle; this loop runs only while the service is awake.
+def _scheduled_pipeline_loop():
+    while True:
+        try:
+            interval = int(os.getenv("PIPELINE_INTERVAL", "3600"))
+            interval = max(300, min(interval, 86400))
+        except (TypeError, ValueError):
+            interval = 3600
+        time.sleep(interval)
+        if os.getenv("PIPELINE_MODE", "semi-auto").strip() != "auto":
+            continue
+        run_id = None
+        try:
+            last = get_last_run()
+            if last and last.get("status") == "running":
+                continue
+            run_id = start_run()
+            logger.info(f"Scheduled pipeline run #{run_id} started")
+            import asyncio
+            from channel_ai_bot import run_all_channels
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                results = loop.run_until_complete(run_all_channels())
+                published = sum(len(items) for items in (results or {}).values() if items)
+                finish_run(run_id, posts_published=published, status="completed")
+                logger.info(f"Scheduled pipeline run #{run_id} finished; published={published}")
+            finally:
+                loop.close()
+        except Exception as exc:
+            logger.error(f"Scheduled pipeline run failed: {exc}")
+            if run_id is not None:
+                try:
+                    finish_run(run_id, status="failed", errors=str(exc))
+                except Exception:
+                    pass
+
+
+_scheduler_thread = threading.Thread(
+    target=_scheduled_pipeline_loop, name="channelai-scheduler", daemon=True
+)
+_scheduler_thread.start()
+
+
 # ---------- error handlers ----------
 
 @app.errorhandler(404)
