@@ -171,15 +171,29 @@ async def publish_post_bot(session, destination, result):
 
 
 async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
-    """Scan public sources, generate posts, and publish with a Telegram bot."""
-    if not POLLINATIONS_KEY:
-        print("ERROR: POLLINATIONS_API_KEY is missing.")
+    """Scan public sources, generate posts, and publish with a Telegram bot.
+
+    Read settings at run time because the dashboard can update os.environ after
+    this module was first imported. Render environment variables remain supported.
+    """
+    import channel_ai as _channel_ai
+
+    # Refresh provider credentials and destination at the start of every run.
+    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip() or POLLINATIONS_KEY
+    destination = os.getenv("CHANNEL_ID", "").strip() or CHANNEL_ID
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or BOT_TOKEN
+    if api_key:
+        _channel_ai.POLLINATIONS_KEY = api_key
+        _channel_ai.HEADERS["Authorization"] = f"Bearer {api_key}"
+
+    if not api_key:
+        print("ERROR: POLLINATIONS_API_KEY is missing. Configure a valid provider key.")
         return []
-    if not BOT_TOKEN:
-        print("ERROR: TELEGRAM_BOT_TOKEN is missing.")
+    if not bot_token:
+        print("ERROR: TELEGRAM_BOT_TOKEN is missing in Render Environment")
         return []
-    if not CHANNEL_ID:
-        print("ERROR: CHANNEL_ID is missing.")
+    if not destination:
+        print("ERROR: CHANNEL_ID is missing. Save the destination channel ID in Settings or Render Environment.")
         return []
     sources = _configured_sources()
     if not sources:
@@ -215,7 +229,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
             "language": "ru",
             "search_topics": ["актуальные новости"],
             "sources": sources,
-            "channel_id": CHANNEL_ID,
+            "channel_id": destination,
         }
         results = []
         for i, post in enumerate(selected):
@@ -228,7 +242,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
         published = []
         for result in results:
             try:
-                msg_id = await publish_post_bot(session, CHANNEL_ID, result)
+                msg_id = await publish_post_bot(session, destination, result)
                 published.append(result)
                 # Commit this source fingerprint only after Telegram confirms success.
                 is_duplicate(result.get("_source_text", result.get("text", "")))
