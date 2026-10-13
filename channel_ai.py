@@ -101,7 +101,9 @@ HEADERS = {
 
 
 async def ai_call(session, model, system, user, max_tokens=1200):
-    """Call any AI model via Pollinations OpenAI-compatible API."""
+    """Optional paid provider. Never block publishing when it is unavailable."""
+    if not POLLINATIONS_KEY:
+        return None
     try:
         async with session.post(
             f"{POLLINATIONS_BASE_URL}/v1/chat/completions",
@@ -122,6 +124,7 @@ async def ai_call(session, model, system, user, max_tokens=1200):
                     return data["choices"][0]["message"]["content"]
                 except (KeyError, IndexError):
                     return None
+            print(f"  Optional AI provider returned HTTP {resp.status}; using free fallback.")
     except asyncio.TimeoutError:
         # str() on a TimeoutError is empty, so spell out what actually happened
         print(f"  AI error ({model}): request timed out after {AI_TIMEOUT}s")
@@ -131,7 +134,9 @@ async def ai_call(session, model, system, user, max_tokens=1200):
 
 
 async def generate_image(prompt: str, vpn_proxy: str | None = None):
-    """Generate image via Pollinations Flux model."""
+    """Optional image generation; skip cleanly without a funded provider."""
+    if not POLLINATIONS_KEY:
+        return None
     # the prompt rides in the URL path, so it can't run long — but a bare [:500]
     # drops the tail with nothing in the log to say so, and a cut prompt is the
     # usual reason an image comes back not matching the post. say how much went.
@@ -301,7 +306,28 @@ def is_duplicate(text: str):
 async def process_post(session, post, prompt_config):
     """Full pipeline for a single post: factcheck → rewrite → humanize → image."""
 
-    # 1. Fact-check via Perplexity
+    # Free mode: format source text locally; no external AI API required.
+    if not POLLINATIONS_KEY:
+        source = post.get("source", "")
+        username = post.get("source_username", "")
+        msg_id = post.get("msg_id")
+        link = f"https://t.me/{username}/{msg_id}" if username and msg_id else ""
+        body = re.sub(r"\s+", " ", (post.get("text") or "")).strip()
+        if len(body) < 40:
+            return None
+        rewritten = f"<b>📰 Главное</b>\n\n{body}\n\n"
+        if source:
+            rewritten += f"Источник: {source}\n"
+        if link:
+            rewritten += f'📎 <a href="{link}">Оригинал</a>'
+        return {
+            "text": rewritten[:4000],
+            "image_prompt": None,
+            "poll_data": None,
+            "source": source,
+        }
+
+    # 1. Fact-check via optional AI provider
     factcheck = await ai_call(
         session, "perplexity-fast",
         "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
@@ -463,11 +489,7 @@ async def run_cycle(channel_key: str = "default", max_posts=MAX_POSTS):
     from telethon.sessions import StringSession
     from telethon.tl.types import PeerChannel
 
-    if not POLLINATIONS_KEY:
-        print("ERROR: POLLINATIONS_API_KEY not set. Add it to your .env "
-              "before running (see README.md for setup).")
-        return
-
+    # AI provider is optional; without it, process_post uses the local free formatter.
     missing = [name for name, val in (
         ("TELEGRAM_API_ID", TELEGRAM_API_ID),
         ("TELEGRAM_API_HASH", TELEGRAM_API_HASH),
