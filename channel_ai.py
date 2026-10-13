@@ -334,7 +334,10 @@ async def process_post(session, post, prompt_config):
     if not rewritten:
         # No external AI key or provider is unavailable: safe, no-cost fallback.
         clean = re.sub(r"\s+", " ", source_text).strip()
-        rewritten = f"<b>📰 Коротко о главном</b>\n\n{clean[:3000]}"
+        # Source posts are untrusted input: escape HTML so Telegram's HTML parser
+        # cannot interpret source text as tags or fail on stray ampersands.
+        safe_clean = html.escape(clean[:3000])
+        rewritten = f"<b>📰 Коротко о главном</b>\n\n{safe_clean}"
         if source_link:
             rewritten += f"\n\n🔗 Источник: {html.escape(source_link)}"
         if msg_link and msg_link not in rewritten:
