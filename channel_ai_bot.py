@@ -190,9 +190,9 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
         _channel_ai.POLLINATIONS_KEY = api_key
         _channel_ai.HEADERS["Authorization"] = f"Bearer {api_key}"
 
+    # AI is optional: channel_ai.process_post has a deterministic no-cost fallback.
     if not api_key:
-        print("ERROR: POLLINATIONS_API_KEY is missing. Configure a valid provider key.")
-        return []
+        print("INFO: no AI provider key configured; using no-cost text fallback.")
     if not bot_token:
         print("ERROR: TELEGRAM_BOT_TOKEN is missing in Render Environment")
         return []
