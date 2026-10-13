@@ -46,3 +46,16 @@ async def test_process_post_falls_back_when_ai_provider_fails(monkeypatch):
     assert "A source report." in result["text"]
     assert "Источник: Example" in result["text"]
     assert result["image_prompt"] == ""
+
+@pytest.mark.asyncio
+async def test_process_post_escapes_untrusted_html_in_source(monkeypatch):
+    monkeypatch.setattr(channel_ai, "POLLINATIONS_KEY", "")
+    result = await channel_ai.process_post(
+        None,
+        {"text": "Breaking & <script>alert(1)</script>", "source": "Example"},
+        {},
+    )
+    assert result is not None
+    assert "Breaking &amp; &lt;script&gt;alert(1)&lt;/script&gt;" in result["text"]
+    assert "<script>" not in result["text"]
+
