@@ -154,7 +154,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     if not CHANNEL_ID:
         print("ERROR: CHANNEL_ID is missing.")
         return []
-    sources = [s.strip().lstrip("@") for s in DEFAULT_SOURCES if s.strip()]
+    sources = _configured_sources()
     if not sources:
         print("ERROR: DEFAULT_SOURCES is empty. Set it to public source usernames.")
         return []
