@@ -22,6 +22,7 @@ DB_PATH = os.getenv("DB_PATH", os.path.join(os.path.dirname(__file__), "data.db"
 # keys we manage through the settings page
 SETTINGS_KEYS = [
     "POLLINATIONS_API_KEY",
+    "TELEGRAM_BOT_TOKEN",
     "TELEGRAM_API_ID",
     "TELEGRAM_API_HASH",
     "CHANNEL_ID",
@@ -35,6 +36,7 @@ def load_settings():
     """Read current settings from env (already loaded) with safe defaults."""
     return {
         "POLLINATIONS_API_KEY": os.getenv("POLLINATIONS_API_KEY", ""),
+        "TELEGRAM_BOT_TOKEN": os.getenv("TELEGRAM_BOT_TOKEN", ""),
         "TELEGRAM_API_ID": os.getenv("TELEGRAM_API_ID", ""),
         "TELEGRAM_API_HASH": os.getenv("TELEGRAM_API_HASH", ""),
         "CHANNEL_ID": os.getenv("CHANNEL_ID", ""),
