@@ -176,14 +176,14 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     Read settings at run time because the dashboard can update os.environ after
     this module was first imported. Render environment variables remain supported.
     """
+    global BOT_TOKEN, CHANNEL_ID
     import channel_ai as _channel_ai
 
     # Refresh provider credentials and destination at the start of every run.
     api_key = os.getenv("POLLINATIONS_API_KEY", "").strip() or POLLINATIONS_KEY
     destination = os.getenv("CHANNEL_ID", "").strip() or CHANNEL_ID
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or BOT_TOKEN
-    # The publishing helper reads this module-level token.
-    global BOT_TOKEN, CHANNEL_ID
+    # The publishing helper reads these module-level settings.
     BOT_TOKEN = bot_token
     CHANNEL_ID = destination
     if api_key:
