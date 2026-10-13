@@ -101,12 +101,23 @@ def block_cross_site_writes():
     # ambient credentials, so they pass through untouched.
     if request.method not in ("POST", "PUT", "PATCH", "DELETE"):
         return
-    fetch_site = request.headers.get("Sec-Fetch-Site", "")
-    if fetch_site and fetch_site not in ("same-origin", "none"):
-        return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    # Render and other reverse proxies may expose the public host through
+    # X-Forwarded-Host while Flask's request.host reflects an internal host.
+    # Compare Origin against the externally visible host first, falling back
+    # to request.host for local deployments.
     origin = request.headers.get("Origin", "")
-    if origin and urlsplit(origin).netloc != request.host:
-        return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    forwarded_host = request.headers.get("X-Forwarded-Host", "").split(",")[0].strip()
+    expected_host = forwarded_host or request.host
+    if origin:
+        origin_host = urlsplit(origin).netloc
+        if origin_host and origin_host.lower() != expected_host.lower():
+            return jsonify({"error": "Cross-site requests are not allowed"}), 403
+    else:
+        # Requests without an Origin header are accepted only when Fetch Metadata
+        # does not explicitly identify them as cross-site.
+        fetch_site = request.headers.get("Sec-Fetch-Site", "")
+        if fetch_site and fetch_site not in ("same-origin", "none"):
+            return jsonify({"error": "Cross-site requests are not allowed"}), 403
 
 
 @app.after_request
@@ -155,6 +166,51 @@ if DEBUG:
 # init db on startup
 init_db()
 logger.info("App started, db initialized")
+
+
+# --- lightweight in-process scheduler ---
+# Render free services can sleep while idle; this loop runs only while the service is awake.
+def _scheduled_pipeline_loop():
+    while True:
+        try:
+            interval = int(os.getenv("PIPELINE_INTERVAL", "3600"))
+            interval = max(300, min(interval, 86400))
+        except (TypeError, ValueError):
+            interval = 3600
+        time.sleep(interval)
+        if os.getenv("PIPELINE_MODE", "semi-auto").strip() != "auto":
+            continue
+        run_id = None
+        try:
+            last = get_last_run()
+            if last and last.get("status") == "running":
+                continue
+            run_id = start_run()
+            logger.info(f"Scheduled pipeline run #{run_id} started")
+            import asyncio
+            from channel_ai_bot import run_all_channels
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                results = loop.run_until_complete(run_all_channels())
+                published = sum(len(items) for items in (results or {}).values() if items)
+                finish_run(run_id, posts_published=published, status="completed")
+                logger.info(f"Scheduled pipeline run #{run_id} finished; published={published}")
+            finally:
+                loop.close()
+        except Exception as exc:
+            logger.error(f"Scheduled pipeline run failed: {exc}")
+            if run_id is not None:
+                try:
+                    finish_run(run_id, status="failed", errors=str(exc))
+                except Exception:
+                    pass
+
+
+_scheduler_thread = threading.Thread(
+    target=_scheduled_pipeline_loop, name="channelai-scheduler", daemon=True
+)
+_scheduler_thread.start()
 
 
 # ---------- error handlers ----------
@@ -422,7 +478,7 @@ def api_run_pipeline():
     def _run():
         try:
             import asyncio
-            from channel_ai import run_all_channels
+            from channel_ai_bot import run_all_channels
             loop = asyncio.new_event_loop()
             all_results = loop.run_until_complete(run_all_channels())
             published = sum(len(r) for r in (all_results or {}).values() if r)
