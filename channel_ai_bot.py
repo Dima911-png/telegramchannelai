@@ -183,7 +183,14 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     async with aiohttp.ClientSession() as session:
         posts = await scan_public_sources(session, sources)
         print(f"  Found {len(posts)} public source posts")
+        # Deduplication checks mutate the shared hash set. Keep a snapshot so a
+        # post is not permanently marked as handled before it is actually published.
+        import channel_ai as _channel_ai
+        old_hashes = set(_channel_ai._published_hashes)
+        old_tokens = dict(_channel_ai._hash_tokens)
         unique = [p for p in posts if not is_duplicate(p["text"])]
+        _channel_ai._published_hashes = old_hashes
+        _channel_ai._hash_tokens = old_tokens
         selected = unique[:max_posts]
         if not selected:
             save_hashes()
@@ -207,6 +214,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
             print(f"  [{i+1}/{len(selected)}] Generating: {post['text'][:60]}...")
             processed = await process_post(session, post, prompt_config)
             if processed:
+                processed["_source_text"] = post["text"]
                 results.append(processed)
             await asyncio.sleep(1)
         published = []
@@ -214,6 +222,8 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
             try:
                 msg_id = await publish_post_bot(session, CHANNEL_ID, result)
                 published.append(result)
+                # Commit this source fingerprint only after Telegram confirms success.
+                is_duplicate(result.get("_source_text", result.get("text", "")))
                 print(f"  Published via Bot API: message_id={msg_id}")
             except Exception as exc:
                 print(f"  Publish failed: {exc}")
