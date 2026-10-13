@@ -333,7 +333,7 @@ async def process_post(session, post, prompt_config):
 
     if not rewritten:
         # No external AI key or provider is unavailable: safe, no-cost fallback.
-        clean = re.sub(r"\\s+", " ", source_text).strip()
+        clean = re.sub(r"\s+", " ", source_text).strip()
         rewritten = f"<b>📰 Коротко о главном</b>\n\n{clean[:3000]}"
         if source_link:
             rewritten += f"\n\n🔗 Источник: {html.escape(source_link)}"
@@ -342,7 +342,7 @@ async def process_post(session, post, prompt_config):
         return {"text": rewritten, "image_prompt": "", "poll_data": "", "source": post.get("source", "")}
 
     if factcheck:
-        urls = re.findall(r"https?://[^\\s\\)\\\"<>]+", factcheck)
+        urls = re.findall(r"https?://[^\s\)\"<>]+", factcheck)
         real_urls = [u for u in urls if len(u.split("/")) > 3]
         if real_urls and not any(u in rewritten for u in real_urls[:2]):
             rewritten += "\n\n" + "\n".join(f"🔗 {u}" for u in real_urls[:3])
