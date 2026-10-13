@@ -422,7 +422,7 @@ def api_run_pipeline():
     def _run():
         try:
             import asyncio
-            from channel_ai import run_all_channels
+            from channel_ai_bot import run_all_channels
             loop = asyncio.new_event_loop()
             all_results = loop.run_until_complete(run_all_channels())
             published = sum(len(r) for r in (all_results or {}).values() if r)
