@@ -182,6 +182,10 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     api_key = os.getenv("POLLINATIONS_API_KEY", "").strip() or POLLINATIONS_KEY
     destination = os.getenv("CHANNEL_ID", "").strip() or CHANNEL_ID
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip() or BOT_TOKEN
+    # The publishing helper reads this module-level token.
+    global BOT_TOKEN, CHANNEL_ID
+    BOT_TOKEN = bot_token
+    CHANNEL_ID = destination
     if api_key:
         _channel_ai.POLLINATIONS_KEY = api_key
         _channel_ai.HEADERS["Authorization"] = f"Bearer {api_key}"
