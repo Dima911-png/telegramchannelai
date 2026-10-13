@@ -128,8 +128,8 @@ async def publish_post_bot(session, destination, result):
         text = text[:3990].rsplit(" ", 1)[0] + "…"
     # Telegram HTML parsing can fail on model-generated malformed markup.
     # Retry as plain text rather than silently losing a generated post.
-    plain_text = re.sub(r"<br\\s*/?>", "\\n", text, flags=re.I)
-    plain_text = re.sub(r"</(p|div|li|h[1-6])\\s*>", "\\n", plain_text, flags=re.I)
+    plain_text = re.sub(r"<br\s*/?>", "\n", text, flags=re.I)
+    plain_text = re.sub(r"</(p|div|li|h[1-6])\s*>", "\n", plain_text, flags=re.I)
     plain_text = html.unescape(re.sub(r"<[^>]+>", "", plain_text))
     image_path = None
     try:
@@ -142,12 +142,33 @@ async def publish_post_bot(session, destination, result):
                 form.add_field("caption", text[:1024])
                 form.add_field("parse_mode", "HTML")
                 form.add_field("photo", photo, filename="post.jpg", content_type="image/jpeg")
-                sent = await _bot_api(session, "sendPhoto", data=form)
+                try:
+                    sent = await _bot_api(session, "sendPhoto", data=form)
+                except RuntimeError as exc:
+                    message = str(exc).lower()
+                    if "parse entities" not in message and "can't parse" not in message:
+                        raise
+                    # Re-open the file because the multipart request may have consumed it.
+                    with open(image_path, "rb") as photo:
+                        form = aiohttp.FormData()
+                        form.add_field("chat_id", destination)
+                        form.add_field("caption", plain_text[:1024])
+                        form.add_field("photo", photo, filename="post.jpg", content_type="image/jpeg")
+                        sent = await _bot_api(session, "sendPhoto", data=form)
             if len(text) > 1024:
-                await _bot_api(session, "sendMessage", data={
-                    "chat_id": destination, "text": text, "parse_mode": "HTML",
-                    "disable_web_page_preview": "true",
-                })
+                try:
+                    await _bot_api(session, "sendMessage", data={
+                        "chat_id": destination, "text": text, "parse_mode": "HTML",
+                        "disable_web_page_preview": "true",
+                    })
+                except RuntimeError as exc:
+                    message = str(exc).lower()
+                    if "parse entities" not in message and "can't parse" not in message:
+                        raise
+                    await _bot_api(session, "sendMessage", data={
+                        "chat_id": destination, "text": plain_text,
+                        "disable_web_page_preview": "true",
+                    })
         else:
             try:
                 sent = await _bot_api(session, "sendMessage", data={
@@ -171,15 +192,36 @@ async def publish_post_bot(session, destination, result):
 
 
 async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
-    """Scan public sources, generate posts, and publish with a Telegram bot."""
-    if not POLLINATIONS_KEY:
-        print("ERROR: POLLINATIONS_API_KEY is missing.")
+    """Scan public sources, generate posts, and publish with a Telegram bot.
+
+    Read settings at run time because the dashboard can update os.environ after
+    this module was first imported. Render environment variables remain supported.
+    """
+    global BOT_TOKEN, CHANNEL_ID
+    import channel_ai as _channel_ai
+
+    # Refresh provider credentials and destination at the start of every run.
+    # Environment values are authoritative at runtime. Do not fall back to stale
+    # module constants: the dashboard may have cleared or replaced a value after import.
+    api_key = os.getenv("POLLINATIONS_API_KEY", "").strip()
+    destination = os.getenv("CHANNEL_ID", "").strip()
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    BOT_TOKEN = bot_token
+    CHANNEL_ID = destination
+    _channel_ai.POLLINATIONS_KEY = api_key
+    if api_key:
+        _channel_ai.HEADERS["Authorization"] = f"Bearer {api_key}"
+    else:
+        _channel_ai.HEADERS.pop("Authorization", None)
+
+    # AI is optional: channel_ai.process_post has a deterministic no-cost fallback.
+    if not api_key:
+        print("INFO: no AI provider key configured; using no-cost text fallback.")
+    if not bot_token:
+        print("ERROR: TELEGRAM_BOT_TOKEN is missing in Render Environment")
         return []
-    if not BOT_TOKEN:
-        print("ERROR: TELEGRAM_BOT_TOKEN is missing.")
-        return []
-    if not CHANNEL_ID:
-        print("ERROR: CHANNEL_ID is missing.")
+    if not destination:
+        print("ERROR: CHANNEL_ID is missing. Save the destination channel ID in Settings or Render Environment.")
         return []
     sources = _configured_sources()
     if not sources:
@@ -215,7 +257,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
             "language": "ru",
             "search_topics": ["актуальные новости"],
             "sources": sources,
-            "channel_id": CHANNEL_ID,
+            "channel_id": destination,
         }
         results = []
         for i, post in enumerate(selected):
@@ -228,7 +270,7 @@ async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
         published = []
         for result in results:
             try:
-                msg_id = await publish_post_bot(session, CHANNEL_ID, result)
+                msg_id = await publish_post_bot(session, destination, result)
                 published.append(result)
                 # Commit this source fingerprint only after Telegram confirms success.
                 is_duplicate(result.get("_source_text", result.get("text", "")))

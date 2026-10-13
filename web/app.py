@@ -304,7 +304,7 @@ def _mask(value: str):
 
 
 # keys whose values should be masked in the settings form
-_SECRET_FIELDS = ("POLLINATIONS_API_KEY", "TELEGRAM_API_HASH")
+_SECRET_FIELDS = ("POLLINATIONS_API_KEY", "TELEGRAM_API_HASH", "TELEGRAM_BOT_TOKEN")
 
 
 @app.route("/settings", methods=["GET", "POST"])
@@ -330,6 +330,7 @@ def settings_page():
 
         fields = {
             "POLLINATIONS_API_KEY": request.form.get("pollinations_key", "").strip(),
+            "TELEGRAM_BOT_TOKEN": request.form.get("telegram_bot_token", "").strip(),
             "TELEGRAM_API_ID": request.form.get("telegram_api_id", "").strip(),
             "TELEGRAM_API_HASH": request.form.get("telegram_api_hash", "").strip(),
             "CHANNEL_ID": request.form.get("channel_id", "").strip(),
@@ -354,6 +355,9 @@ def settings_page():
         # the key is one unbroken token up to 128 chars (form says \S+, maxlength=128), but a
         # raw POST can slip in whitespace or an overlong paste — either way it's not a real key,
         # so keep whatever was there instead of writing garbage to .env
+        token = fields["TELEGRAM_BOT_TOKEN"]
+        if token and (len(token) > 256 or not re.fullmatch(r"[0-9]+:[A-Za-z0-9_-]+", token)):
+            fields["TELEGRAM_BOT_TOKEN"] = current.get("TELEGRAM_BOT_TOKEN", "")
         pk = fields["POLLINATIONS_API_KEY"]
         if pk and (len(pk) > 128 or re.search(r"\s", pk)):
             fields["POLLINATIONS_API_KEY"] = current.get("POLLINATIONS_API_KEY", "")
