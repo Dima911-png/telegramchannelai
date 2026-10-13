@@ -30,7 +30,7 @@ load_dotenv()
 # ═══════════════════════════════════════════
 
 POLLINATIONS_KEY = os.getenv("POLLINATIONS_API_KEY", "")
-TELEGRAM_API_ID = int(os.getenv("TELEGRAM_API_ID", "0"))
+TELEGRAM_API_ID = int((os.getenv("TELEGRAM_API_ID", "").strip() or "0"))
 TELEGRAM_API_HASH = os.getenv("TELEGRAM_API_HASH", "")
 TELEGRAM_SESSION = os.getenv("TELEGRAM_SESSION", "")
 
