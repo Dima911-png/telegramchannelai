@@ -47,6 +47,23 @@
         <p class="hint" id="pollinations_key-hint">Used for text and image generation. Leave blank if using free tier.</p>
     </div>
 
+    <!-- Telegram bot token -->
+    <div>
+        <label for="telegram_bot_token" class="block text-sm font-medium text-gray-300 mb-1">Telegram Bot Token</label>
+        <div class="flex gap-2">
+            <input type="password" name="telegram_bot_token" id="telegram_bot_token"
+                value="{{ settings.TELEGRAM_BOT_TOKEN }}"
+                data-initial="{{ settings.TELEGRAM_BOT_TOKEN }}"
+                placeholder="123456789:ABC..."
+                maxlength="256" autocomplete="new-password"
+                class="flex-1 min-w-0 bg-dark-900 border border-gray-700 rounded px-3 py-2 text-sm text-gray-200 focus:border-blue-500 focus:outline-none">
+            {% if settings.TELEGRAM_BOT_TOKEN %}
+            <button type="button" onclick="copyValue('telegram_bot_token', this)" class="copy-field" title="Copy bot token">copy</button>
+            {% endif %}
+        </div>
+        <p class="hint">Required to publish. Create a bot with @BotFather and add it as an administrator to your destination channel. Leave the Pollinations key blank to use the no-cost text fallback.</p>
+    </div>
+
     <!-- Telegram API -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div>
