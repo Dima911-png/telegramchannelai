@@ -5,7 +5,7 @@
 <div class="mb-6 flex items-start justify-between flex-wrap gap-3">
     <div>
         <h1 class="text-2xl font-bold">Settings</h1>
-        <p class="text-gray-500 text-sm mt-1">Pipeline and API configuration. Saved to <code class="text-gray-400">.env</code>.</p>
+        <p class="text-gray-500 text-sm mt-1">Pipeline configuration. AI API is optional; without it, posts use a local formatter. Saved to <code class="text-gray-400">.env</code>.</p>
         {% if global_last_run %}
         <p class="muted mt-1" id="settings-last-run" data-ts="{{ global_last_run.started_at }}"></p>
         {% endif %}
@@ -44,7 +44,7 @@
                 title="Copy API key">copy</button>
             {% endif %}
         </div>
-        <p class="hint" id="pollinations_key-hint">Used for text and image generation. Leave blank if using free tier.</p>
+        <p class="hint" id="pollinations_key-hint">Optional paid AI provider. Leave empty to avoid paid API calls; free mode publishes source text with formatting and links (no AI rewriting or generated images).</p>
     </div>
 
     <!-- Telegram API -->
@@ -316,7 +316,7 @@ function confirmSettingsSave(form) {
     }
     const key = form.querySelector('#pollinations_key');
     if (key && key.dataset.initial && !key.value.trim()) {
-        if (!confirm("Clear the Pollinations API key? Generation drops back to the free tier and the key itself is gone once saved.")) return false;
+        if (!confirm("Clear the Pollinations API key? The pipeline will switch to local free formatting; AI rewriting and generated images will be disabled.")) return false;
     }
 
     // confirmed — show a spinner while the POST round-trips so the click feels acknowledged
