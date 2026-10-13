@@ -93,7 +93,7 @@ async def scan_public_sources(session, channels, hours=SCAN_HOURS):
     return posts
 
 
-async def _bot_api(session, method, *, data=None, form=None):
+async def _bot_api(session, method, *, data=None):
     if not BOT_TOKEN:
         raise RuntimeError("TELEGRAM_BOT_TOKEN is missing in Render Environment")
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/{method}"
@@ -123,7 +123,7 @@ async def publish_post_bot(session, destination, result):
                 form.add_field("caption", text[:1024])
                 form.add_field("parse_mode", "HTML")
                 form.add_field("photo", photo, filename="post.jpg", content_type="image/jpeg")
-                sent = await _bot_api(session, "sendPhoto", form={"data": form})
+                sent = await _bot_api(session, "sendPhoto", data=form)
             if len(text) > 1024:
                 await _bot_api(session, "sendMessage", data={
                     "chat_id": destination, "text": text, "parse_mode": "HTML",
