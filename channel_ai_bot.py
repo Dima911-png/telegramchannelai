@@ -142,12 +142,33 @@ async def publish_post_bot(session, destination, result):
                 form.add_field("caption", text[:1024])
                 form.add_field("parse_mode", "HTML")
                 form.add_field("photo", photo, filename="post.jpg", content_type="image/jpeg")
-                sent = await _bot_api(session, "sendPhoto", data=form)
+                try:
+                    sent = await _bot_api(session, "sendPhoto", data=form)
+                except RuntimeError as exc:
+                    message = str(exc).lower()
+                    if "parse entities" not in message and "can't parse" not in message:
+                        raise
+                    # Re-open the file because the multipart request may have consumed it.
+                    with open(image_path, "rb") as photo:
+                        form = aiohttp.FormData()
+                        form.add_field("chat_id", destination)
+                        form.add_field("caption", plain_text[:1024])
+                        form.add_field("photo", photo, filename="post.jpg", content_type="image/jpeg")
+                        sent = await _bot_api(session, "sendPhoto", data=form)
             if len(text) > 1024:
-                await _bot_api(session, "sendMessage", data={
-                    "chat_id": destination, "text": text, "parse_mode": "HTML",
-                    "disable_web_page_preview": "true",
-                })
+                try:
+                    await _bot_api(session, "sendMessage", data={
+                        "chat_id": destination, "text": text, "parse_mode": "HTML",
+                        "disable_web_page_preview": "true",
+                    })
+                except RuntimeError as exc:
+                    message = str(exc).lower()
+                    if "parse entities" not in message and "can't parse" not in message:
+                        raise
+                    await _bot_api(session, "sendMessage", data={
+                        "chat_id": destination, "text": plain_text,
+                        "disable_web_page_preview": "true",
+                    })
         else:
             try:
                 sent = await _bot_api(session, "sendMessage", data={
