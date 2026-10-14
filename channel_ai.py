@@ -304,106 +304,27 @@ def is_duplicate(text: str):
 # ═══════════════════════════════════════════
 
 async def process_post(session, post, prompt_config):
-    """Full pipeline for a single post: factcheck → rewrite → humanize → image."""
-
-    # Free mode: format source text locally; no external AI API required.
-    if not POLLINATIONS_KEY:
-        source = post.get("source", "")
-        username = post.get("source_username", "")
-        msg_id = post.get("msg_id")
-        link = f"https://t.me/{username}/{msg_id}" if username and msg_id else ""
-        body = re.sub(r"\s+", " ", (post.get("text") or "")).strip()
-        if len(body) < 40:
-            return None
-        rewritten = f"<b>📰 Главное</b>\n\n{body}\n\n"
-        if source:
-            rewritten += f"Источник: {source}\n"
-        if link:
-            rewritten += f'📎 <a href="{link}">Оригинал</a>'
-        return {
-            "text": rewritten[:4000],
-            "image_prompt": None,
-            "poll_data": None,
-            "source": source,
-        }
-
-    # 1. Fact-check via optional AI provider
-    factcheck = await ai_call(
-        session, "perplexity-fast",
-        "Fact-checker. Verify this news: find official sources, media confirmations, URLs. Brief.",
-        f"Verify:\n{post['text'][:400]}",
-        500,
-    )
-
-    # 2. Build source link
-    source_link = post.get("source", "")
-    msg_link = ""
-    if post.get("msg_id") and post.get("source_username"):
-        msg_link = f"https://t.me/{post['source_username']}/{post['msg_id']}"
-        source_link = f"{post['source']} | {msg_link}"
-
-    # 3. Rewrite in channel style
-    rewritten = await ai_call(
-        session, TEXT_MODEL,
-        prompt_config["system_prompt"],
-        f"Rewrite:\n{post['text']}\n\nSource: {source_link}\n\nFact-check:\n{factcheck or 'none'}",
-        1500,
-    )
-    if not rewritten:
+    """Format source news locally. Never call a paid/external AI provider."""
+    source_text = (post.get("text") or "").strip()
+    if len(source_text) < 1:
         return None
 
-    # Check exclusions
-    if rewritten.strip().upper().startswith("SKIP"):
-        print(f"  Skipped (exclusion): {post['text'][:50]}...")
-        return None
-
-    # 4. Humanize — make it sound natural
-    humanized = await ai_call(
-        session, "openai",
-        "Humanize this text. Keep HTML formatting. Replace formal language with conversational. "
-        "Vary sentence length. Remove excess emoji (max 2). Don't add new facts. Output ONLY the text.",
-        rewritten,
-        1500,
-    )
-    # only swap in the humanized version if it looks like a full post — a short reply
-    # here usually means a refusal or a truncated blurb, so keep the original rewrite
-    if humanized and len(humanized) > 100:
-        rewritten = humanized
-
-    # 5. Extract URLs from factcheck
-    if factcheck:
-        urls = re.findall(r"https?://[^\s\)\"<>]+", factcheck)
-        # Keep only links that point at an actual article, not a bare homepage.
-        # "https://site.com" splits into 3 parts; anything with a path has 4+.
-        real_urls = [u for u in urls if len(u.split("/")) > 3]
-        if real_urls and not any(u in rewritten for u in real_urls[:2]):
-            rewritten += "\n\n" + "\n".join(f"🔗 {u}" for u in real_urls[:3])
-
-    if msg_link and msg_link not in rewritten:
-        rewritten += f"\n📢 {msg_link}"
-
-    # 6. Generate image prompt
-    img_prompt = await ai_call(
-        session, "claude-fast",
-        "Generate Flux AI image prompt. English, max 50 words. Cinematic, 4k. NO text. Output ONLY prompt.",
-        rewritten[:300],
-        80,
-    )
-
-    # 7. Generate poll question
-    poll_data = await ai_call(
-        session, "claude-fast",
-        'Create a Telegram poll. JSON only, no markdown:\n'
-        '{"question":"short question about the news","answers":["option 1","option 2","option 3"]}',
-        rewritten[:300],
-        200,
-    )
-
+    source = post.get("source", "")
+    username = post.get("source_username", "")
+    msg_id = post.get("msg_id", "")
+    msg_link = f"https://t.me/{username}/{msg_id}" if username and msg_id else ""
+    clean = re.sub(r"\s+", " ", source_text).strip()
+    safe_text = html.escape(clean[:3000])
+    output = f"<b>📰 Коротко о главном</b>\n\n{safe_text}"
+    if source:
+        output += f"\n\n🔗 Источник: {html.escape(str(source))}"
+    if msg_link:
+        output += f"\n📢 {html.escape(msg_link)}"
     return {
-        "text": rewritten,
-        "image_prompt": img_prompt,
-        "poll_data": poll_data,
-        "source": post.get("source", ""),
+        "text": output,
+        "image_prompt": "",
+        "poll_data": "",
+        "source": source,
     }
 
 
