@@ -128,7 +128,6 @@ def init_db():
 
     seed_published()
     seed_pipeline_runs()
-    _ensure_pg_sources()
 
 
 # --- sources ---
