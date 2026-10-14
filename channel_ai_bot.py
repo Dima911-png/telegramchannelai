@@ -31,7 +31,9 @@ def _configured_sources():
             name = row.get("username")
             if name:
                 names.append(str(name).strip().lstrip("@"))
-        if names:
+        # Honour dashboard sources even when none are active; do not silently
+        # scan unrelated defaults when the user configured their own list.
+        if rows:
             return list(dict.fromkeys(names))
     except Exception as exc:
         print(f"  Could not load dashboard sources; using DEFAULT_SOURCES: {exc}")
@@ -172,9 +174,6 @@ async def publish_post_bot(session, destination, result):
 
 async def run_cycle(channel_key="default", max_posts=MAX_POSTS):
     """Scan public sources, generate posts, and publish with a Telegram bot."""
-    if not POLLINATIONS_KEY:
-        print("ERROR: POLLINATIONS_API_KEY is missing.")
-        return []
     if not BOT_TOKEN:
         print("ERROR: TELEGRAM_BOT_TOKEN is missing.")
         return []

@@ -126,7 +126,7 @@ def init_db():
         if "duration_ms" not in cols:
             conn.execute("ALTER TABLE pipeline_runs ADD COLUMN duration_ms INTEGER DEFAULT 0")
 
-    seed_published()
+    # Do not seed fake published posts into a live dashboard.
     seed_pipeline_runs()
 
 
@@ -325,7 +325,8 @@ def get_stats():
     """Return dashboard counters: published posts, active sources, pending queue size, and last run info."""
     with db_conn() as conn:
         total_published = conn.execute("SELECT COUNT(*) FROM published").fetchone()[0]
-        total_sources = conn.execute("SELECT COUNT(*) FROM sources WHERE is_active = 1").fetchone()[0]
+        # Sources may live in Supabase while run history remains in SQLite.
+        total_sources = sum(1 for source in get_sources() if source.get("is_active", False))
         queue_size = conn.execute("SELECT COUNT(*) FROM queue WHERE status = 'pending'").fetchone()[0]
         total_runs = conn.execute("SELECT COUNT(*) FROM pipeline_runs").fetchone()[0]
 
