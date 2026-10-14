@@ -172,13 +172,21 @@ logger.info("App started, db initialized")
 # Render free services can sleep while idle; this loop runs only while the service is awake.
 def _scheduled_pipeline_loop():
     while True:
+        # Read dashboard-saved settings on each iteration so changes made on
+        # /settings take effect without relying on stale process environment.
         try:
-            interval = int(os.getenv("PIPELINE_INTERVAL", "3600"))
+            settings = load_settings()
+            interval = int(settings.get("PIPELINE_INTERVAL") or os.getenv("PIPELINE_INTERVAL", "900"))
             interval = max(300, min(interval, 86400))
         except (TypeError, ValueError):
-            interval = 3600
+            interval = 900
         time.sleep(interval)
-        if os.getenv("PIPELINE_MODE", "semi-auto").strip() != "auto":
+        try:
+            settings = load_settings()
+            mode = str(settings.get("PIPELINE_MODE") or os.getenv("PIPELINE_MODE", "semi-auto")).strip()
+        except Exception:
+            mode = os.getenv("PIPELINE_MODE", "semi-auto").strip()
+        if mode != "auto":
             continue
         run_id = None
         try:
