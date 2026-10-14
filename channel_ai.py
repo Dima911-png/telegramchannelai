@@ -313,13 +313,13 @@ async def process_post(session, post, prompt_config):
     username = post.get("source_username", "")
     msg_id = post.get("msg_id", "")
     msg_link = f"https://t.me/{username}/{msg_id}" if username and msg_id else ""
-    clean = re.sub(r"\\s+", " ", source_text).strip()
+    clean = re.sub(r"\s+", " ", source_text).strip()
     safe_text = html.escape(clean[:3000])
-    output = f"<b>📰 Коротко о главном</b>\\n\\n{safe_text}"
+    output = f"<b>📰 Коротко о главном</b>\n\n{safe_text}"
     if source:
-        output += f"\\n\\n🔗 Источник: {html.escape(str(source))}"
+        output += f"\n\n🔗 Источник: {html.escape(str(source))}"
     if msg_link:
-        output += f"\\n📢 {html.escape(msg_link)}"
+        output += f"\n📢 {html.escape(msg_link)}"
     return {
         "text": output,
         "image_prompt": "",
